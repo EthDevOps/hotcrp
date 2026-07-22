@@ -1,0 +1,25 @@
+# Keep local state and build artifacts out of the image build context.
+.git
+.github
+.gitignore
+.gitattributes
+.DS_Store
+*~
+
+# Local configuration and runtime data (regenerated / mounted at runtime).
+conf
+docs
+filestore
+logs
+
+# Dependencies and tooling not needed at runtime.
+node_modules
+package-lock.json
+vendor
+composer.json
+composer.lock
+test/oauth/vendor
+test/oauth/composer.lock
+
+# Docs and dev-only material.
+devel/d3/node_modules

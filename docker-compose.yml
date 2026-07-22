@@ -1,0 +1,53 @@
+# Local / self-hosted HotCRP stack: the application plus a MariaDB database.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:8080. The first user to register becomes the
+# site administrator (HotCRP's normal setup-phase behavior).
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${HOTCRP_DB_NAME:-hotcrp}
+      MARIADB_USER: ${HOTCRP_DB_USER:-hotcrp}
+      MARIADB_PASSWORD: ${HOTCRP_DB_PASSWORD:-hotcrp}
+      MARIADB_ROOT_PASSWORD: ${HOTCRP_DB_ROOT_PASSWORD:-root}
+    # HotCRP needs a large max_allowed_packet to accept paper-sized uploads.
+    command: --max-allowed-packet=64M --character-set-server=utf8mb4
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: ghcr.io/ethdevops/hotcrp:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOTCRP_DB_HOST: db
+      HOTCRP_DB_NAME: ${HOTCRP_DB_NAME:-hotcrp}
+      HOTCRP_DB_USER: ${HOTCRP_DB_USER:-hotcrp}
+      HOTCRP_DB_PASSWORD: ${HOTCRP_DB_PASSWORD:-hotcrp}
+      HOTCRP_CONF_SHORTNAME: ${HOTCRP_CONF_SHORTNAME:-HotCRP Test}
+      HOTCRP_CONTACT_EMAIL: ${HOTCRP_CONTACT_EMAIL:-admin@example.com}
+      # Local dev sends no real email by default.
+      HOTCRP_SEND_EMAIL: ${HOTCRP_SEND_EMAIL:-false}
+    ports:
+      - "${HOTCRP_PORT:-8080}:80"
+    volumes:
+      # Persist uploaded documents and logs across container restarts.
+      - app-docs:/var/www/html/docs
+      - app-logs:/var/www/html/logs
+
+volumes:
+  db-data:
+  app-docs:
+  app-logs:
