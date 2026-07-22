@@ -30,7 +30,12 @@ if (($site = hotcrp_env("HOTCRP_PAPER_SITE")) !== null) {
 $Opt["contactName"] = hotcrp_env("HOTCRP_CONTACT_NAME", "HotCRP Administrator");
 $Opt["contactEmail"] = hotcrp_env("HOTCRP_CONTACT_EMAIL", "admin@example.com");
 $Opt["emailFrom"] = hotcrp_env("HOTCRP_EMAIL_FROM", $Opt["contactEmail"]);
-$Opt["sendEmail"] = filter_var(hotcrp_env("HOTCRP_SEND_EMAIL", "true"), FILTER_VALIDATE_BOOLEAN);
+// Sending mail requires an SMTP relay (see HOTCRP_SMTP_* / docker/entrypoint.sh).
+// Default sendEmail on when a relay is configured, otherwise off.
+$Opt["sendEmail"] = filter_var(hotcrp_env("HOTCRP_SEND_EMAIL", hotcrp_env("HOTCRP_SMTP_HOST") ? "true" : "false"), FILTER_VALIDATE_BOOLEAN);
+if (($sender = hotcrp_env("HOTCRP_EMAIL_SENDER")) !== null) {
+    $Opt["emailSender"] = $sender;
+}
 
 // Store uploaded papers on the local filesystem (mount a volume at ./docs).
 // Set HOTCRP_DOCSTORE=0 to keep documents in the database instead.

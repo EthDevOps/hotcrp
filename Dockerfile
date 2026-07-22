@@ -9,10 +9,14 @@ FROM php:8.4-apache
 # System packages:
 #  - poppler-utils: `pdftohtml`/`pdftoppm`, used by the paper-format checker (banal)
 #  - default-mysql-client: used by the entrypoint to load the schema on first boot
+#  - msmtp / msmtp-mta: HotCRP mails through a local sendmail binary (it has no
+#    native SMTP); msmtp-mta provides /usr/sbin/sendmail that relays via SMTP
 #  - the -dev libraries back the PHP extensions installed just below
 RUN apt-get update && apt-get install -y --no-install-recommends \
         poppler-utils \
         default-mysql-client \
+        msmtp \
+        msmtp-mta \
         libicu-dev \
         libonig-dev \
         libzip-dev \
@@ -35,12 +39,15 @@ RUN a2enmod rewrite remoteip
 
 # PHP runtime tuning. Mirrors the recommendations in README.md / .user.ini so
 # large paper uploads work and sessions live long enough.
+# Proxy-header normalization runs before every request (see trusted-proxy.php).
+COPY docker/trusted-proxy.php /usr/local/lib/hotcrp/trusted-proxy.php
 RUN { \
         echo 'upload_max_filesize = 30M'; \
         echo 'post_max_size = 35M'; \
         echo 'max_input_vars = 4096'; \
         echo 'memory_limit = 256M'; \
         echo 'session.gc_maxlifetime = 86400'; \
+        echo 'auto_prepend_file = /usr/local/lib/hotcrp/trusted-proxy.php'; \
     } > /usr/local/etc/php/conf.d/hotcrp.ini
 
 # Point Apache at the repo root and allow the shipped `.htaccess` to take effect.

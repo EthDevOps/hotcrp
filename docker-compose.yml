@@ -38,7 +38,20 @@ services:
       HOTCRP_DB_PASSWORD: ${HOTCRP_DB_PASSWORD:-hotcrp}
       HOTCRP_CONF_SHORTNAME: ${HOTCRP_CONF_SHORTNAME:-HotCRP Test}
       HOTCRP_CONTACT_EMAIL: ${HOTCRP_CONTACT_EMAIL:-admin@example.com}
-      # Local dev sends no real email by default.
+      # Set true when running behind a TLS-terminating proxy/ingress so HotCRP
+      # trusts X-Forwarded-Proto/Port/Host and builds correct absolute URLs
+      # (otherwise redirects can encode the backend port, e.g. https://host:80/).
+      HOTCRP_TRUST_PROXY: ${HOTCRP_TRUST_PROXY:-false}
+      # Local dev sends no real email by default. To relay through an SMTP
+      # server, set HOTCRP_SMTP_HOST (and friends); email then turns on
+      # automatically. HotCRP has no native SMTP — it pipes mail to a local
+      # sendmail binary, which the image provides via msmtp.
+      # HOTCRP_SMTP_HOST: smtp.example.com
+      # HOTCRP_SMTP_PORT: "587"
+      # HOTCRP_SMTP_TLS: starttls        # starttls | smtps | off
+      # HOTCRP_SMTP_USER: apikey
+      # HOTCRP_SMTP_PASSWORD: secret
+      # HOTCRP_EMAIL_FROM: hotcrp@example.com
       HOTCRP_SEND_EMAIL: ${HOTCRP_SEND_EMAIL:-false}
     ports:
       - "${HOTCRP_PORT:-8080}:80"

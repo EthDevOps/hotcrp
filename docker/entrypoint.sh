@@ -25,6 +25,36 @@ mysql_cmd() {
         ${DB_PASSWORD:+--password="$DB_PASSWORD"} "$@"
 }
 
+# Configure outgoing mail. HotCRP pipes messages to /usr/sbin/sendmail (msmtp);
+# when HOTCRP_SMTP_HOST is set we generate an msmtp config that relays to that
+# SMTP server. Without it, mail delivery is not configured.
+if [ -n "${HOTCRP_SMTP_HOST:-}" ]; then
+    echo "hotcrp: configuring SMTP relay via ${HOTCRP_SMTP_HOST}:${HOTCRP_SMTP_PORT:-587}"
+    {
+        echo "defaults"
+        echo "logfile -"
+        case "${HOTCRP_SMTP_TLS:-starttls}" in
+            off|none) echo "tls off" ;;
+            on|smtps) echo "tls on"; echo "tls_starttls off" ;;
+            *)        echo "tls on"; echo "tls_starttls on" ;;
+        esac
+        echo "account default"
+        echo "host ${HOTCRP_SMTP_HOST}"
+        echo "port ${HOTCRP_SMTP_PORT:-587}"
+        echo "from ${HOTCRP_EMAIL_FROM:-${HOTCRP_CONTACT_EMAIL:-hotcrp@localhost}}"
+        if [ -n "${HOTCRP_SMTP_USER:-}" ]; then
+            echo "auth on"
+            echo "user ${HOTCRP_SMTP_USER}"
+            echo "password ${HOTCRP_SMTP_PASSWORD:-}"
+        else
+            echo "auth off"
+        fi
+    } > /etc/msmtprc
+    # msmtp refuses configs that are group/world readable.
+    chmod 600 /etc/msmtprc
+    chown www-data:www-data /etc/msmtprc
+fi
+
 echo "hotcrp: waiting for database ${DB_HOST}:${DB_PORT}..."
 tries=0
 until mysql_cmd --execute="SELECT 1" "$DB_NAME" >/dev/null 2>&1; do
