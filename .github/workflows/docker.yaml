@@ -1,0 +1,122 @@
+name: Docker
+
+# Builds the image from upstream kohler/hotcrp whenever it publishes a new
+# vX.Y[.Z] tag, using the Dockerfile in docker/, then creates a matching
+# release on this repo.
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Upstream tag to build (default: latest vX.Y[.Z])'
+        required: false
+      suffix:
+        description: 'Rebuild: push only <version><suffix> (e.g. -php8.4.27), skip release check and creation'
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  UPSTREAM: kohler/hotcrp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Find new upstream release
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_SUFFIX: ${{ inputs.suffix }}
+        run: |
+          TAG="${INPUT_TAG:-$(git ls-remote --tags --refs "https://github.com/$UPSTREAM.git" 'refs/tags/v*' \
+            | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)}"
+          VERSION="${TAG#v}"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "minor=$(echo "$VERSION" | cut -d. -f1-2)"
+            echo "major=$(echo "$VERSION" | cut -d. -f1)"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$INPUT_SUFFIX" ]; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          elif gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG already released, nothing to do"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout build files
+        if: steps.tag.outputs.new
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream ${{ steps.tag.outputs.tag }}
+        if: steps.tag.outputs.new
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ steps.tag.outputs.tag }}
+          path: src
+
+      # Upstream ships no Dockerfile: ours (and its .dockerignore) go into the
+      # upstream tree, which is the build context.
+      - name: Add build files to upstream tree
+        if: steps.tag.outputs.new
+        run: cp -r docker src/docker
+
+      - name: Set up Docker Buildx
+        if: steps.tag.outputs.new
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: steps.tag.outputs.new
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upstream tags are vX.Y or vX.Y.Z (not strict semver), so tags are raw.
+      - name: Extract Docker metadata
+        if: steps.tag.outputs.new
+        id: meta
+        uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.version }}${{ inputs.suffix }},enable=${{ inputs.suffix != '' }}
+            type=raw,value=latest,enable=${{ inputs.tag == '' && inputs.suffix == '' }}
+            type=raw,value=${{ steps.tag.outputs.version }},enable=${{ inputs.suffix == '' }}
+            type=raw,value=${{ steps.tag.outputs.minor }},enable=${{ inputs.suffix == '' && steps.tag.outputs.minor != steps.tag.outputs.version }}
+            type=raw,value=${{ steps.tag.outputs.major }},enable=${{ inputs.suffix == '' }}
+
+      - name: Build and push Docker image
+        if: steps.tag.outputs.new
+        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        with:
+          context: src
+          file: src/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create release
+        if: steps.tag.outputs.new && inputs.suffix == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" \
+            --notes "Upstream release: https://github.com/$UPSTREAM/releases/tag/$TAG
+
+          Image: \`$REGISTRY/${IMAGE_NAME,,}:${TAG#v}\`"
