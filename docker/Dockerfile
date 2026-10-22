@@ -57,10 +57,6 @@ RUN { \
 ENV APACHE_DOCUMENT_ROOT=/var/www/html
 RUN sed -ri 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf
 
-# php2shell (CVE-2026-109618/109619) interim hardening.
-# Remove once the base ships PHP >= 8.4.27.
-COPY docker/php2shell.conf /etc/apache2/conf-enabled/zz-php2shell.conf
-
 WORKDIR /var/www/html
 
 # Copy the application. `.dockerignore` keeps local state (conf/, logs, docs,

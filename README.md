@@ -37,8 +37,6 @@ To rebuild a version that has already been released, delete its GitHub release f
 
 To rebuild with a security fix (e.g. a patched `php:8.4-apache` base) without touching existing tags, set `suffix` (e.g. `-php8.4.27`): only `<version><suffix>` is pushed and no release is created.
 
-**Temporary:** the image ships php2shell (CVE-2026-109618/109619) hardening in `docker/php2shell.conf` (Apache `conf-enabled/zz-php2shell.conf`: one request per worker, no PHP memory limit, upload progress off). Remove it once the base ships PHP >= 8.4.27.
-
 ## Local build
 
 ```
