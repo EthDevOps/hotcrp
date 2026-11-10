@@ -17,8 +17,8 @@ on:
         required: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: docker.ethquokkaops.io
+  IMAGE_NAME: ethquokkaops/ethdevops/hotcrp
   UPSTREAM: kohler/hotcrp
 
 jobs:
@@ -27,6 +27,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      # Required for the GitHub OIDC token used to authenticate against OpenBao.
+      id-token: write
 
     steps:
       - name: Find new upstream release
@@ -75,13 +77,28 @@ jobs:
         if: steps.tag.outputs.new
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
+      # Harbor robot credential via OpenBao (role bound to this workflow file;
+      # ETH-2812 registry migration, was ghcr.io + GITHUB_TOKEN).
+      - name: Fetch registry credentials from OpenBao
+        if: steps.tag.outputs.new
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3.4.0
+        with:
+          url: https://tyrell.ethquokkaops.io
+          path: jwt-github
+          method: jwt
+          role: ethquokkaops-hotcrp-ci
+          exportEnv: true
+          secrets: |
+            secret/ethquokkaops/data/docker-registry/production/credentials/ethquokkaops/robot-hotcrp user | DOCKER_REGISTRY_USER ;
+            secret/ethquokkaops/data/docker-registry/production/credentials/ethquokkaops/robot-hotcrp pass | DOCKER_REGISTRY_SECRET
+
       - name: Log into registry ${{ env.REGISTRY }}
         if: steps.tag.outputs.new
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.DOCKER_REGISTRY_USER }}
+          password: ${{ env.DOCKER_REGISTRY_SECRET }}
 
       # Upstream tags are vX.Y or vX.Y.Z (not strict semver), so tags are raw.
       - name: Extract Docker metadata
