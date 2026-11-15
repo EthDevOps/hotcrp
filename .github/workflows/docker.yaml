@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
       # Required for the GitHub OIDC token used to authenticate against OpenBao.
       id-token: write
 
@@ -124,8 +123,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No layer cache: the apt-get upgrade layer must not be reused, or a
+          # rebuild would ship the same Debian packages as the last build.
+          pull: true
+          no-cache: true
 
       - name: Create release
         if: steps.tag.outputs.new && inputs.suffix == ''

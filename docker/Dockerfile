@@ -15,7 +15,10 @@ FROM php:8.4-apache
 #  - msmtp / msmtp-mta: HotCRP mails through a local sendmail binary (it has no
 #    native SMTP); msmtp-mta provides /usr/sbin/sendmail that relays via SMTP
 #  - the -dev libraries back the PHP extensions installed just below
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `apt-get upgrade` pulls Debian security updates the php:8.4-apache base has not
+# picked up yet (e.g. apache2 2.4.71-1~deb13u1 for CVE-2026-119618).
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         poppler-utils \
         default-mysql-client \
         msmtp \
